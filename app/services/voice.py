@@ -11,8 +11,10 @@ from edge_tts import SubMaker, submaker
 from edge_tts.submaker import mktimestamp
 from loguru import logger
 from moviepy.video.tools import subtitles
-
+from moviepy import AudioFileClip
 from app.config import config
+from app.services.utils.xf_tts import XfTts
+
 from app.utils import utils
 
 
@@ -1084,27 +1086,28 @@ def tts(
     voice_file: str,
     voice_volume: float = 1.0,
 ) -> Union[SubMaker, None]:
-    if is_azure_v2_voice(voice_name):
-        return azure_tts_v2(text, voice_name, voice_file)
-    elif is_siliconflow_voice(voice_name):
-        # 从voice_name中提取模型和声音
-        # 格式: siliconflow:model:voice-Gender
-        parts = voice_name.split(":")
-        if len(parts) >= 3:
-            model = parts[1]
-            # 移除性别后缀，例如 "alex-Male" -> "alex"
-            voice_with_gender = parts[2]
-            voice = voice_with_gender.split("-")[0]
-            # 构建完整的voice参数，格式为 "model:voice"
-            full_voice = f"{model}:{voice}"
-            return siliconflow_tts(
-                text, model, full_voice, voice_rate, voice_file, voice_volume
-            )
-        else:
-            logger.error(f"Invalid siliconflow voice name format: {voice_name}")
-            return None
-    return azure_tts_v1(text, voice_name, voice_rate, voice_file)
-
+    voice_name = "x4_yezi"
+    return xf_tts(text,voice_name,voice_rate,voice_file)
+    # if is_azure_v2_voice(voice_name):
+    #     return azure_tts_v2(text, voice_name, voice_file)
+    # elif is_siliconflow_voice(voice_name):
+    #     # 从voice_name中提取模型和声音
+    #     # 格式: siliconflow:model:voice-Gender
+    #     parts = voice_name.split(":")
+    #     if len(parts) >= 3:
+    #         model = parts[1]
+    #         # 移除性别后缀，例如 "alex-Male" -> "alex"
+    #         voice_with_gender = parts[2]
+    #         voice = voice_with_gender.split("-")[0]
+    #         # 构建完整的voice参数，格式为 "model:voice"
+    #         full_voice = f"{model}:{voice}"
+    #         return siliconflow_tts(
+    #             text, model, full_voice, voice_rate, voice_file, voice_volume
+    #         )
+    #     else:
+    #         logger.error(f"Invalid siliconflow voice name format: {voice_name}")
+    #         return None
+    # return azure_tts_v1(text, voice_name, voice_rate, voice_file)
 
 def convert_rate_to_percent(rate: float) -> str:
     if rate == 1.0:
@@ -1150,6 +1153,34 @@ def azure_tts_v1(
             logger.error(f"failed, error: {str(e)}")
     return None
 
+
+def xf_tts(
+        text: str, voice_name: str, voice_rate: float, voice_file: str
+) -> Union[SubMaker, None]:
+    text = text.strip()
+    sub_maker = edge_tts.SubMaker()
+    app_id = config.xf_tts.get("xf_app_id", "")
+    api_key = config.xf_tts.get("xf_api_key", "")
+    api_secret = config.xf_tts.get("api_secret", "")
+
+    if len(app_id) == 0 or len(api_key) ==0 or len(api_secret) == 0:
+        logger.error("xf_tts API key is not set")
+        return None
+    logger.info(f"start tts for xunfei, voice name: {voice_name}")
+    tts = XfTts(app_id=app_id, api_key = api_key, api_secret = api_secret)
+    tts.set_voice(voice_name)
+    result = tts.synthesize(text, voice_file)
+    if not result:
+        logger.error("xf tts synthesize fail!")
+        return None
+
+    logger.info(f"completed, output file: {voice_file}")
+    # 不分割，整个文本作为一个字幕
+    sub_maker.subs = [text]
+    audio_clip = AudioFileClip(voice_file)
+    audio_duration_100ns = audio_clip.duration * 10000000
+    sub_maker.offset = [(0, audio_duration_100ns)]
+    return sub_maker
 
 def siliconflow_tts(
     text: str,

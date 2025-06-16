@@ -279,7 +279,7 @@ def correct(subtitle_file, video_script):
 
 
 if __name__ == "__main__":
-    task_id = "c12fd1e6-4b0a-4d65-a075-c87abe35a072"
+    task_id = "ddfe6911-179b-4628-bed3-635101e1e5ca"
     task_dir = utils.task_dir(task_id)
     subtitle_file = f"{task_dir}/subtitle.srt"
     audio_file = f"{task_dir}/audio.mp3"
